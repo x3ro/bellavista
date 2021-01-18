@@ -1,0 +1,10 @@
+[package]
+name = "bellavista"
+version = "0.0.1"
+authors = ["lucas.jenss"]
+edition = "2018"
+license = "GPL-3.0-only"
+
+[dependencies]
+druid = "0.7.0"
+bytesize = "1.0.0"

@@ -1,0 +1,3 @@
+[submodule "vendor/piet"]
+	path = vendor/piet
+	url = git@github.com:x3ro/piet.git

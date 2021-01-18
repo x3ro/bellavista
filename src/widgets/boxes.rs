@@ -24,6 +24,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use druid::widget::prelude::Data;
+use piet::{ImageFormat, Image, InterpolationMode};
+use piet_common::{Piet, PietImage};
 
 #[derive(Debug, Clone, Data)]
 pub struct FileBox {
@@ -32,13 +34,16 @@ pub struct FileBox {
     pub rect: Rect,
 }
 
-#[derive(Debug)]
+//#[derive(Debug)]
 pub struct Boxes {
     pub boxes: Vec<FileBox>,
+    pub cached_image: Option<PietImage>
     //pub active: Option<FileBox>,
 }
 
 fn color_for_path(path: &String) -> Color {
+
+
     let mut hasher = DefaultHasher::new();
     path.hash(&mut hasher);
     Color::rgba8((hasher.finish() % 255) as u8, 0x00, 255 as u8, 255)
@@ -150,6 +155,7 @@ impl Widget<BoxData> for Boxes {
             LifeCycle::WidgetAdded => {}
             LifeCycle::Size(size) => {
                 if let Some(node) = &data.node {
+                    self.cached_image = None;
                     self.boxes = vec![];
                     self.foo_rect(node, size.to_rect());
                 }
@@ -161,8 +167,6 @@ impl Widget<BoxData> for Boxes {
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &BoxData, data: &BoxData, _env: &Env) {
-        //println!("update");
-
         if old_data.node != data.node {
             println!("Node data changed, recalculating");
             self.boxes = vec![];
@@ -175,7 +179,6 @@ impl Widget<BoxData> for Boxes {
         }
 
         if let Some(file) = &data.selected_file {
-            //println!("partial repaint {:?}", &file.rect);
             ctx.request_paint();
         }
     }
@@ -191,17 +194,22 @@ impl Widget<BoxData> for Boxes {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, data: &BoxData, _env: &Env) {
-
         let size = ctx.size();
         let rect = size.to_rect();
-        println!("paint {:?}", ctx.region().rects());
 
-        let debug_col = Color::from_hex_str("#ff00ff").unwrap();
-        ctx.fill(rect, &debug_col);
+        if let Some(cached_image) = &self.cached_image {
+            ctx.draw_image(cached_image, rect, InterpolationMode::NearestNeighbor);
+        } else {
+            let debug_col = Color::from_hex_str("#ff00ff").unwrap();
+            ctx.fill(rect, &debug_col);
 
-        for b in &self.boxes {
-            let color = color_for_path(&b.path);
-            ctx.fill(b.rect, &color);
+            for b in &self.boxes {
+                let color = color_for_path(&b.path);
+                ctx.fill(b.rect, &color);
+            }
+
+            let img = ctx.render_ctx.save_image(rect).unwrap();
+            self.cached_image = Some(img);
         }
 
         match &data.selected_file {

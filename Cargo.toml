@@ -8,3 +8,9 @@ license = "GPL-3.0-only"
 [dependencies]
 druid = "0.7.0"
 bytesize = "1.0.0"
+piet = "0.3"
+piet-common = "0.3"
+
+[patch.crates-io]
+piet = { path = "vendor/piet/piet"}
+piet-coregraphics = { path = "vendor/piet/piet-coregraphics"}

@@ -67,6 +67,8 @@ version = "0.0.1"
 dependencies = [
  "bytesize",
  "druid",
+ "piet",
+ "piet-common",
 ]
 
 [[package]]
@@ -872,8 +874,6 @@ dependencies = [
 [[package]]
 name = "piet"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb9f6fc8efb51e16882094fbfcd4b931f59773be4176f2512c6248e081a1b41f"
 dependencies = [
  "kurbo",
  "unic-bidi",
@@ -913,8 +913,6 @@ dependencies = [
 [[package]]
 name = "piet-coregraphics"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5af1ce12cf0a1dc7f894f6f90ba62467d685a39b7f1d235516c8688f98e92d18"
 dependencies = [
  "core-foundation",
  "core-foundation-sys",

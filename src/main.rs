@@ -174,7 +174,7 @@ impl AppDelegate<AppState> for Delegate {
 }
 
 fn build_root() -> impl Widget<AppState> {
-    let boxes = widgets::boxes::Boxes { boxes: vec![] };
+    let boxes = widgets::boxes::Boxes { boxes: vec![], cached_image: None };
 
     let label = Label::new(|data: &AppState, _env: &Env| match &data.selected_file {
         Some(file) => format!("{} ({})", file.path, ByteSize(file.size)),
@@ -190,7 +190,7 @@ fn build_root() -> impl Widget<AppState> {
 
     let child = Flex::column().with_flex_child(boxes, 1.0).with_child(
         Flex::row()
-            //.with_child(label)
+            .with_child(label)
             .with_flex_spacer(1.0)
             .with_child(open),
     );

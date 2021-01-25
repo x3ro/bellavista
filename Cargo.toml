@@ -10,6 +10,17 @@ druid = "0.7.0"
 bytesize = "1.0.0"
 piet = "0.3"
 piet-common = "0.3"
+skulpin = { version = "0.11.1", features = ["skulpin-renderer-sdl2"] }
+skia-safe = "<0.37"
+log="0.4"
+env_logger = "0.6"
+skulpin-renderer = "0.5.0"
+skulpin-renderer-sdl2 = "0.5.0"
+
+# The skulpin-renderer-sdl2 crate doesn't specify any features, but downstream
+# libraries can do so by including sdl2 for themselves. Examples will use the
+# features added here
+sdl2 = { version = ">=0.33", features = ["bundled", "static-link"] }
 
 [patch.crates-io]
 piet = { path = "vendor/piet/piet"}

@@ -12,6 +12,11 @@ use sdl2::mouse::{MouseState, MouseButton};
 
 use skulpin::app::TimeState;
 use skulpin_renderer::Window;
+use std::path::Path;
+use crate::scanning::Node;
+use skia_safe::Rect;
+
+mod scanning;
 
 #[derive(Clone, Copy)]
 struct Position {
@@ -40,6 +45,7 @@ struct ExampleAppState {
     previous_mouse_state: MouseState,
     drag_start_position: Option<Position>,
     previous_clicks: VecDeque<PreviousClick>,
+    boxes: Vec<FileBox>,
 }
 
 fn main() {
@@ -108,6 +114,10 @@ fn main() {
 
     let initial_mouse_state = sdl2::mouse::MouseState::new(&event_pump);
 
+    let node = scanning::scan(Path::new("/Users/lucas.jenss/_pdev")).unwrap();
+    let mut boxes: Vec<FileBox> = vec![];
+    calc_boxes(&mut boxes, &node, visible_range);
+
     let mut app_state = ExampleAppState {
         last_fps_text_change: None,
         fps_text: "".to_string(),
@@ -115,6 +125,7 @@ fn main() {
         current_mouse_state: initial_mouse_state,
         previous_mouse_state: initial_mouse_state,
         drag_start_position: None,
+        boxes,
     };
 
     let mut time_state = skulpin::app::TimeState::new();
@@ -199,6 +210,77 @@ fn main() {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct FileBox {
+    pub path: String,
+    pub size: u64,
+    pub rect: Rect,
+}
+
+fn divide_rect(source: Rect, ratio: f32) -> (Rect, Rect) {
+    if ratio < 0.0 || ratio > 1.0 {
+        panic!("Ratio was out of bounds: {}", ratio)
+    }
+
+    // aspect ratio -> height / width
+    if (source.height() / source.width()) < 1.2 {
+        let left = Rect {
+            left: source.left,
+            top: source.top,
+            right: source.right - source.width() * (1.0 - ratio),
+            bottom: source.bottom,
+        };
+
+        let right = Rect {
+            left: source.left + source.width() * ratio,
+            top: source.top,
+            right: source.right,
+            bottom: source.bottom,
+        };
+
+        (left, right)
+    } else {
+        let left = Rect {
+            left: source.left,
+            top: source.top,
+            right: source.right,
+            bottom: source.bottom - source.height() * (1.0 - ratio),
+        };
+
+        let right = Rect {
+            left: source.left,
+            top: source.top + source.height() * ratio,
+            right: source.right,
+            bottom: source.bottom,
+        };
+
+        (left, right)
+    }
+}
+
+fn calc_boxes(boxes: &mut Vec<FileBox>, root: &Node, bounds: Rect) {
+    match &root.children {
+        Some(children) => {
+            let mut remaining_size = root.size;
+            let mut area = bounds;
+            for c in children {
+                let ratio: f32 = c.size as f32 / remaining_size as f32;
+                let (left, right) = divide_rect(area, ratio);
+                calc_boxes(boxes, c, left);
+                area = right;
+                remaining_size -= c.size;
+            }
+        }
+        None => {
+            boxes.push(FileBox {
+                path: root.path.to_owned(),
+                size: root.size,
+                rect: bounds,
+            });
+        }
+    }
+}
+
 fn update(
     app_state: &mut ExampleAppState,
     time_state: &TimeState,
@@ -250,37 +332,51 @@ fn draw(
     //
     // Draw current mouse position.
     //
-    canvas.draw_circle(
-        skia_safe::Point::new(
-            app_state.current_mouse_state.x() as f32,
-            app_state.current_mouse_state.y() as f32,
-        ),
-        15.0,
-        &paint,
-    );
+    // canvas.draw_circle(
+    //     skia_safe::Point::new(
+    //         app_state.current_mouse_state.x() as f32,
+    //         app_state.current_mouse_state.y() as f32,
+    //     ),
+    //     15.0,
+    //     &paint,
+    // );
 
-    //
-    // Draw previous mouse clicks
-    //
-    for previous_click in &app_state.previous_clicks {
-        let age = now - previous_click.time;
-        let age = age.as_secs_f32().min(1.0).max(0.0);
 
-        // Make a color that fades out as the click is further in the past
-        let mut paint =
-            skia_safe::Paint::new(skia_safe::Color4f::new(0.0, 1.0 - age, 0.0, 1.0), None);
-        paint.set_anti_alias(true);
-        paint.set_style(skia_safe::paint::Style::Stroke);
-        paint.set_stroke_width(3.0);
 
-        let position = previous_click.position;
+    // let r = skia_safe::Rect::new(
+    //     app_state.current_mouse_state.x() as f32,
+    //     (app_state.current_mouse_state.y() + 0) as f32,
+    //     (app_state.current_mouse_state.x() + 50) as f32,
+    //     (app_state.current_mouse_state.y() + 50) as f32);
 
-        canvas.draw_circle(
-            skia_safe::Point::new(position.x as f32, position.y as f32),
-            25.0,
-            &paint,
-        );
+
+    for b in &app_state.boxes {
+        canvas.draw_rect(b.rect, &paint);
     }
+
+
+    // //
+    // // Draw previous mouse clicks
+    // //
+    // for previous_click in &app_state.previous_clicks {
+    //     let age = now - previous_click.time;
+    //     let age = age.as_secs_f32().min(1.0).max(0.0);
+    //
+    //     // Make a color that fades out as the click is further in the past
+    //     let mut paint =
+    //         skia_safe::Paint::new(skia_safe::Color4f::new(0.0, 1.0 - age, 0.0, 1.0), None);
+    //     paint.set_anti_alias(true);
+    //     paint.set_style(skia_safe::paint::Style::Stroke);
+    //     paint.set_stroke_width(3.0);
+    //
+    //     let position = previous_click.position;
+    //
+    //     canvas.draw_circle(
+    //         skia_safe::Point::new(position.x as f32, position.y as f32),
+    //         25.0,
+    //         &paint,
+    //     );
+    //}
 
     //
     // If mouse is being dragged, draw a line to show the drag

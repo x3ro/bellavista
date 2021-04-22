@@ -95,7 +95,11 @@ impl<T: Widget<AppState>> Widget<AppState> for ManagerWidget<T> {
                 }
                 InternalEvent::TargetedCommand(_) => {}
                 InternalEvent::RouteTimer(_, _) => {}
+                InternalEvent::RouteImeStateChange(_) => {}
             },
+            Event::WindowCloseRequested => {}
+            Event::WindowDisconnected => {}
+            Event::ImeStateChange => {}
         }
         self.child.event(ctx, event, data, env);
     }
@@ -141,13 +145,13 @@ pub fn main() -> io::Result<()> {
         node: scan_result,
     };
 
-    let main_window = WindowDesc::new(build_root)
+    let main_window = WindowDesc::new(build_root())
         .title("Bellavista")
         .window_size((600.0, 400.0));
 
     AppLauncher::with_window(main_window)
         .delegate(Delegate)
-        .use_simple_logger()
+        .log_to_console()
         .launch(state)
         .expect("Failed to launch application");
 

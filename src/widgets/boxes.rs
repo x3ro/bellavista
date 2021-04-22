@@ -14,18 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::scanning::Node;
-use crate::AppState;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 use druid::{
     BoxConstraints, Color, Env, Event, EventCtx, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx,
     Rect, RenderContext, Size, UpdateCtx, Widget,
 };
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-
 use druid::widget::prelude::Data;
-use piet::{ImageFormat, Image, InterpolationMode};
+use piet::{Image, ImageFormat, InterpolationMode};
 use piet_common::{Piet, PietImage};
+
+use crate::AppState;
+use crate::scanning::Node;
 
 #[derive(Debug, Clone, Data)]
 pub struct FileBox {
@@ -141,6 +142,9 @@ impl Widget<BoxData> for Boxes {
             Event::Command(_) => {}
             Event::Notification(_) => {}
             Event::Internal(_) => {}
+            Event::WindowCloseRequested => {}
+            Event::WindowDisconnected => {}
+            Event::ImeStateChange => {}
         }
     }
 
@@ -163,6 +167,8 @@ impl Widget<BoxData> for Boxes {
             LifeCycle::HotChanged(_) => {}
             LifeCycle::FocusChanged(_) => {}
             LifeCycle::Internal(_) => {}
+            LifeCycle::DisabledChanged(_) => {}
+            LifeCycle::BuildFocusChain => {}
         }
     }
 
@@ -170,6 +176,7 @@ impl Widget<BoxData> for Boxes {
         if old_data.node != data.node {
             println!("Node data changed, recalculating");
             self.boxes = vec![];
+            self.cached_image = None;
 
             if let Some(node) = &data.node {
                 self.foo_rect(node, ctx.size().to_rect());
@@ -208,7 +215,17 @@ impl Widget<BoxData> for Boxes {
                 ctx.fill(b.rect, &color);
             }
 
-            let img = ctx.render_ctx.save_image(rect).unwrap();
+            // TODO: I currently have no idea why I have to specify the capture rect twice as large
+            // as the draw rect, will have to test more once I'm home again and have a non-retina
+            // display, feels like it's related to that.
+            let capture_rect = Rect {
+                x0: 0.0,
+                y0: 0.0,
+                x1: rect.x1*2.0,
+                y1: rect.y1*2.0
+            };
+
+            let img = ctx.render_ctx.capture_image_area(capture_rect).unwrap();
             self.cached_image = Some(img);
         }
 

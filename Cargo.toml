@@ -5,12 +5,16 @@ authors = ["lucas.jenss"]
 edition = "2018"
 license = "GPL-3.0-only"
 
+[profile.dev]
+split-debuginfo = "unpacked"
+
 [dependencies]
-druid = "0.7.0"
+druid = ""
 bytesize = "1.0.0"
-piet = "0.3"
-piet-common = "0.3"
+piet = ""
+piet-common = ""
 
 [patch.crates-io]
-piet = { path = "vendor/piet/piet"}
-piet-coregraphics = { path = "vendor/piet/piet-coregraphics"}
+druid = { path = "vendor/druid/druid"}
+#piet = { path = "vendor/piet/piet"}
+#piet-coregraphics = { path = "vendor/piet/piet-coregraphics"}

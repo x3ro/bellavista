@@ -33,6 +33,7 @@ pub struct FileBox {
     pub path: String,
     pub size: u64,
     pub rect: Rect,
+    pub parent: Option<Rect>,
 }
 
 
@@ -94,7 +95,7 @@ fn divide_rect(source: Rect, ratio: f64) -> (Rect, Rect) {
 
 type BoxData = AppState;
 impl Boxes {
-    fn foo_rect(&mut self, root: &Node, bounds: Rect) {
+    fn foo_rect(&mut self, root: &Node, bounds: Rect, parent: Option<Rect>) {
         match &root.children {
             Some(children) => {
                 let mut remaining_size = root.size;
@@ -102,7 +103,7 @@ impl Boxes {
                 for c in children {
                     let ratio: f64 = c.size as f64 / remaining_size as f64;
                     let (left, right) = divide_rect(area, ratio);
-                    self.foo_rect(c, left);
+                    self.foo_rect(c, left, Some(bounds));
                     area = right;
                     remaining_size -= c.size;
                 }
@@ -112,6 +113,7 @@ impl Boxes {
                     path: root.path.to_owned(),
                     size: root.size,
                     rect: bounds,
+                    parent
                 });
             }
         }
@@ -129,6 +131,7 @@ impl Widget<BoxData> for Boxes {
                 for b in &self.boxes {
                     if b.rect.contains(e.pos) {
                         data.selected_file = Some(b.clone());
+
                         break;
                     }
                 }
@@ -162,7 +165,7 @@ impl Widget<BoxData> for Boxes {
                 if let Some(node) = &data.node {
                     self.cached_image = None;
                     self.boxes = vec![];
-                    self.foo_rect(node, size.to_rect());
+                    self.foo_rect(node, size.to_rect(), None);
                 }
             }
             LifeCycle::HotChanged(_) => {}
@@ -180,7 +183,7 @@ impl Widget<BoxData> for Boxes {
             self.cached_image = None;
 
             if let Some(node) = &data.node {
-                self.foo_rect(node, ctx.size().to_rect());
+                self.foo_rect(node, ctx.size().to_rect(), None);
             }
 
             ctx.request_paint();
@@ -234,6 +237,10 @@ impl Widget<BoxData> for Boxes {
             None => {}
             Some(file) => {
                 ctx.fill(file.rect, &Color::WHITE);
+                if let Some(parent) = &file.parent {
+                    ctx.stroke(parent, &Color::WHITE, 3.0);
+                }
+
             }
         }
     }

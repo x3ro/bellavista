@@ -80,7 +80,7 @@ fn visit_dirs(dir: &Path) -> io::Result<Node> {
     }
 
     children.sort();
-    children.reverse();
+    //children.reverse();
 
     Ok(Node {
         size,

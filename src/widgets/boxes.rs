@@ -22,8 +22,8 @@ use druid::{
     Rect, RenderContext, Size, UpdateCtx, Widget,
 };
 use druid::widget::prelude::Data;
-use piet::{Image, ImageFormat, InterpolationMode};
-use piet_common::{Piet, PietImage};
+use piet::{InterpolationMode};
+use piet_common::{PietImage};
 
 use crate::AppState;
 use crate::scanning::Node;
@@ -34,6 +34,7 @@ pub struct FileBox {
     pub size: u64,
     pub rect: Rect,
 }
+
 
 //#[derive(Debug)]
 pub struct Boxes {
@@ -185,7 +186,7 @@ impl Widget<BoxData> for Boxes {
             ctx.request_paint();
         }
 
-        if let Some(file) = &data.selected_file {
+        if let Some(_file) = &data.selected_file {
             ctx.request_paint();
         }
     }

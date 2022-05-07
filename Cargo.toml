@@ -9,12 +9,10 @@ license = "GPL-3.0-only"
 split-debuginfo = "unpacked"
 
 [dependencies]
-druid = ""
+druid = { git = "https://github.com/linebender/druid", branch = "master" }
 bytesize = "1.0.0"
-piet = ""
-piet-common = ""
 
 [patch.crates-io]
-druid = { path = "vendor/druid/druid"}
+#druid = { path = "vendor/druid/druid"}
 #piet = { path = "vendor/piet/piet"}
 #piet-coregraphics = { path = "vendor/piet/piet-coregraphics"}

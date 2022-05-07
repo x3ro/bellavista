@@ -16,14 +16,15 @@
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::mem::swap;
 
 use druid::{
     BoxConstraints, Color, Env, Event, EventCtx, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx,
     Rect, RenderContext, Size, UpdateCtx, Widget,
 };
 use druid::widget::prelude::Data;
-use piet::{InterpolationMode};
-use piet_common::{PietImage};
+use druid::piet::InterpolationMode;
+use druid::piet::PietImage;
 
 use crate::AppState;
 use crate::scanning::Node;
@@ -93,11 +94,129 @@ fn divide_rect(source: Rect, ratio: f64) -> (Rect, Rect) {
     }
 }
 
+
+// fn d2xy(n: u64, d: u64) -> (u64, u64) {
+//     let mut t = d;
+//     let mut x = 0;
+//     let mut y = 0;
+//     let mut rx = 0;
+//     let mut ry = 0;
+//     let mut s = 1;
+//
+//     while s < n {
+//         s *= 2;
+//         rx = 1 & (t/2);
+//         ry = 1 & (t ^ rx);
+//         (x, y) = rot(n, x, y, rx, ry);
+//         x += s * rx;
+//         y += s * ry;
+//         t /= 4;
+//     }
+//
+//     (x, y)
+// }
+//
+// fn rot(n: u64, mut x: u64, mut y: u64, rx: u64, ry: u64) -> (u64, u64) {
+//     if ry == 0 {
+//         if rx == 1 {
+//             x = n - 1 - x;
+//             y = n - 1 - y;
+//         }
+//         swap(&mut x , &mut y);
+//     }
+//     (x, y)
+// }
+
+/// Gives the highest aspect ratio of a list of rectangles (`row`),
+/// given the `length` of the side along which they are to be
+/// laid out.
+fn worst(row: &[u64], length: f64) -> f64 {
+    let sum: u64 = row.iter().sum();
+    let max = (*row.iter().max().unwrap()) as f64;
+    let min = (*row.iter().min().unwrap()) as f64;
+
+    let lpow = length.powf(2.0) as f64;
+    let spow = sum.pow(2) as f64;
+
+    let left = (lpow * max) / spow;
+    let right = spow / (lpow * min);
+
+    left.max(right)
+}
+
+struct Layouting {
+    remaining: Rect,
+
+}
+
+impl Layouting {
+    /// gives the length of the shortest side of the remaining sub-rectangle
+    fn width(&self) -> f64 {
+        if self.remaining.aspect_ratio() > 1.0 {
+            self.remaining.width()
+        } else {
+            self.remaining.height()
+        }
+    }
+
+    fn layoutrow(&self, row: &[u64]) {
+        todo!()
+    }
+
+    fn squarify(&self, children: &[u64], row: Vec<u64>, w: f64) {
+        let c = children.first().unwrap();
+
+        let mut next_row = row.clone();
+        next_row.push(*c);
+        if worst(&row, w) <= worst(&next_row, w) {
+            self.squarify(&children[1..], next_row, w);
+        } else {
+            self.layoutrow(&row);
+            self.squarify(children, vec![], self.width());
+        }
+
+    }
+}
+
+
+
 type BoxData = AppState;
 impl Boxes {
     fn foo_rect(&mut self, root: &Node, bounds: Rect, parent: Option<Rect>) {
         match &root.children {
             Some(children) => {
+                let mut row = vec![];
+                for c in children {
+                    row.push(c.size);
+                }
+
+                // println!("{}", worst(&row, 5));
+                // println!("{}", worst(&row, 50));
+                // println!("{}", worst(&row, 500));
+
+                // let mut smallest_size = u64::MAX;
+                // let mut size_sum = 0;
+                // for c in children {
+                //     let mut size = c.size / 4096;
+                //     if size < 1 {
+                //         size = 1;
+                //     }
+                //
+                //     size_sum += size;
+                //     if smallest_size > size {
+                //         smallest_size = size;
+                //     }
+                // }
+                //
+                // size_sum /= smallest_size;
+                // let mut sqrt = (size_sum as f64).sqrt().ceil() as u64;
+                // if sqrt < 2 {
+                //     sqrt = 2;
+                // }
+                //
+                // println!("sqrt {}", sqrt);
+                // println!("test {:?}", d2xy(sqrt / 2, sqrt));
+
                 let mut remaining_size = root.size;
                 let mut area = bounds;
                 for c in children {
@@ -229,8 +348,8 @@ impl Widget<BoxData> for Boxes {
                 y1: rect.y1*2.0
             };
 
-            let img = ctx.render_ctx.capture_image_area(capture_rect).unwrap();
-            self.cached_image = Some(img);
+            // let img = ctx.render_ctx.capture_image_area(capture_rect).unwrap();
+            // self.cached_image = Some(img);
         }
 
         match &data.selected_file {

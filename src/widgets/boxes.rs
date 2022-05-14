@@ -91,60 +91,16 @@ fn divide_rect(source: Rect, ratio: f64) -> (Rect, Rect) {
     }
 }
 
-
-// fn d2xy(n: u64, d: u64) -> (u64, u64) {
-//     let mut t = d;
-//     let mut x = 0;
-//     let mut y = 0;
-//     let mut rx = 0;
-//     let mut ry = 0;
-//     let mut s = 1;
-//
-//     while s < n {
-//         s *= 2;
-//         rx = 1 & (t/2);
-//         ry = 1 & (t ^ rx);
-//         (x, y) = rot(n, x, y, rx, ry);
-//         x += s * rx;
-//         y += s * ry;
-//         t /= 4;
-//     }
-//
-//     (x, y)
-// }
-//
-// fn rot(n: u64, mut x: u64, mut y: u64, rx: u64, ry: u64) -> (u64, u64) {
-//     if ry == 0 {
-//         if rx == 1 {
-//             x = n - 1 - x;
-//             y = n - 1 - y;
-//         }
-//         swap(&mut x , &mut y);
-//     }
-//     (x, y)
-// }
-
-
-
 struct Layouting<'a> {
     remaining: Rect,
-    result: Vec<(Rect, &'a Node)>
+    result: Vec<(Rect, &'a Node)>,
+    root_size: u64,
 }
 
 #[derive(PartialEq)]
 enum LayoutDirection {
     Vertical,
     Horizontal
-}
-
-impl LayoutDirection {
-    pub fn flip(&self) -> Self {
-        use LayoutDirection::*;
-        match self {
-            Vertical => Horizontal,
-            Horizontal => Vertical
-        }
-    }
 }
 
 macro_rules! print_entity {
@@ -187,7 +143,7 @@ impl<'a> Layouting<'a> {
         let long_length = area_ratio * self.long_length();
 
         println!("Layouting");
-        print_entity!(row);
+        //print_entity!(row);
         print_entity!(ratio);
         print_entity!(row_area);
         print_entity!(area_ratio);
@@ -206,9 +162,11 @@ impl<'a> Layouting<'a> {
 
         for node in row {
             let ratio = (node.size as f64) / row_area;
+            assert!(ratio.is_finite());
             let short_length = ratio * self.short_length();
 
-            println!("Laying out {:?}", node);
+            //println!("Laying out {:?}", node);
+
             print_entity!(ratio);
             print_entity!(short_length);
             print_entity!(cursor);
@@ -239,7 +197,7 @@ impl<'a> Layouting<'a> {
     }
 
     fn squarify(&mut self, children: &'a [Node], row: Vec<&'a Node>) {
-        println!("squarify");
+        println!("squarify()");
         if children.is_empty() {
             let length = self.short_length();
             let current_worst = Self::worst(&row, length);
@@ -249,10 +207,6 @@ impl<'a> Layouting<'a> {
 
         let c = children.first().unwrap();
         let length = self.short_length();
-
-        println!("children {}", children.len());
-        println!("head size {}", c.size);
-        println!("length {}", length);
 
         let mut next_row = row.clone();
         next_row.push(c);
@@ -276,31 +230,16 @@ impl<'a> Layouting<'a> {
     /// given the `length` of the side along which they are to be
     /// laid out.
     fn worst(nodes: &[&Node], length: f64) -> f64 {
-        let sizes: Vec<_> = nodes.iter().map(|n| n.size as f64).collect();
+        let sizes: Vec<_> = nodes.iter().map(|n| {
+            print_entity!(n.size);
+            //(n.size as f64 / self.root_size)
+            n.size as f64
+        }).collect();
         worst(&sizes, length)
     }
-    //     let row: Vec<f64> = nodes.iter().map(|node| (node.size / 4096) as f64).collect();
-    //
-    //     let sum: f64 = row.iter().sum();
-    //     let max = row.iter().copied().fold(f64::NEG_INFINITY, f64::max) / sum * length;
-    //     let min = row.iter().copied().fold(f64::INFINITY, f64::min) / sum * length;
-    //
-    //     let lpow = length.powf(2.0);
-    //     let spow = lpow;
-    //     //let spow = sum.powf(2.0);
-    //
-    //     let left = (lpow * max) / spow;
-    //     let right = spow / (lpow * min);
-    //
-    //     left.max(right)
-    // }
 
     fn start(&mut self, children: &'a [Node]) {
-        // let direction = if self.remaining.aspect_ratio() > 1.0 {
-        //     LayoutDirection::Horizontal
-        // } else {
-        //     LayoutDirection::Vertical
-        // };
+
 
         match &children {
             &[] => {
@@ -308,18 +247,12 @@ impl<'a> Layouting<'a> {
                 return
             }
 
-            &[first] => {
-                todo!()
+            [first, children @ ..]  => {
+                self.squarify(children, vec![first]);
             }
 
-            children => {
-                self.squarify(children, vec![]);
-            }
-            // &[first, tail @ ..] => {
-            //     self.squarify(tail, vec![first], self.width());
-            // }
+            x => todo!("only one node")
         }
-
     }
 }
 
@@ -328,8 +261,8 @@ impl<'a> Layouting<'a> {
 /// laid out.
 fn worst(row: &[f64], length: f64) -> f64 {
     let sum: f64 = row.iter().sum();
-    let max = row.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-    let min = row.iter().copied().fold(f64::INFINITY, f64::min);
+    let max = row.iter().copied().fold(f64::MIN, f64::max);
+    let min = row.iter().copied().fold(f64::MAX, f64::min);
 
     let lpow = length.powf(2.0);
     let spow = sum.powf(2.0);
@@ -337,15 +270,29 @@ fn worst(row: &[f64], length: f64) -> f64 {
     let left = (lpow * max) / spow;
     let right = spow / (lpow * min);
 
-    // println!("left {}", left);
-    // println!("right {}", right);
-    // println!("max {}", max);
-    // println!("min {}", min);
-    // println!("sum {}", sum);
-    // println!("lpow {}", lpow);
-    // println!("spow {}", spow);
+    let mut result = left.max(right);
+    if !result.is_finite() {
+        if left.is_finite() {
+            result = left;
+        } else {
+            result = right;
+        }
+    };
 
-    left.max(right)
+    println!("worst()");
+    print_entity!(row);
+    print_entity!(length);
+    print_entity!(sum);
+    print_entity!(max);
+    print_entity!(min);
+    print_entity!(lpow);
+    print_entity!(spow);
+    print_entity!(left);
+    print_entity!(right);
+    print_entity!(result);
+
+    assert!(result.is_finite());
+    result
 }
 
 
@@ -361,11 +308,17 @@ impl Boxes {
 
                 let mut l = Layouting {
                     remaining: bounds.clone(),
-                    result: vec![]
+                    result: vec![],
+                    root_size: root.size,
+
                 };
 
                 l.start(&children);
-                panic!("the end");
+
+                for (rect, node) in l.result {
+                    self.foo_rect(node, rect, Some(bounds));
+                }
+
 
                 // println!("{}", worst(&row, 5));
                 // println!("{}", worst(&row, 50));
@@ -394,15 +347,18 @@ impl Boxes {
                 // println!("sqrt {}", sqrt);
                 // println!("test {:?}", d2xy(sqrt / 2, sqrt));
 
-                let mut remaining_size = root.size;
-                let mut area = bounds;
-                for c in children {
-                    let ratio: f64 = c.size as f64 / remaining_size as f64;
-                    let (left, right) = divide_rect(area, ratio);
-                    self.foo_rect(c, left, Some(bounds));
-                    area = right;
-                    remaining_size -= c.size;
-                }
+                // let mut remaining_size = root.size;
+                // let mut area = bounds;
+                // for c in children {
+                //     let ratio: f64 = c.size as f64 / remaining_size as f64;
+                //     let (left, right) = divide_rect(area, ratio);
+                //     self.foo_rect(c, left, Some(bounds));
+                //     area = right;
+                //     remaining_size -= c.size;
+                // }
+
+
+
             }
             None => {
                 self.boxes.push(FileBox {
@@ -518,12 +474,12 @@ impl Widget<BoxData> for Boxes {
             // TODO: I currently have no idea why I have to specify the capture rect twice as large
             // as the draw rect, will have to test more once I'm home again and have a non-retina
             // display, feels like it's related to that.
-            let capture_rect = Rect {
-                x0: 0.0,
-                y0: 0.0,
-                x1: rect.x1*2.0,
-                y1: rect.y1*2.0
-            };
+            // let capture_rect = Rect {
+            //     x0: 0.0,
+            //     y0: 0.0,
+            //     x1: rect.x1*2.0,
+            //     y1: rect.y1*2.0
+            // };
 
             // let img = ctx.render_ctx.capture_image_area(capture_rect).unwrap();
             // self.cached_image = Some(img);
@@ -562,7 +518,7 @@ mod tests {
     }
 
     #[test]
-    fn test_foo() {
+    fn test_layouting() {
         let leafs: Vec<_> = vec![6, 6, 4, 3, 2, 2, 1].into_iter().map(make_leaf).collect();
         let mut layout = Layouting {
             remaining: Rect::new(0.0, 0.0, 6.0, 4.0),

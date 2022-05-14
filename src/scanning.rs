@@ -69,7 +69,13 @@ fn visit_dirs(dir: &Path) -> io::Result<Node> {
             size += res.size;
             children.push(res);
         } else if t.is_file() {
-            let filesize = metadata.st_size();
+            let mut filesize = metadata.st_blocks();
+
+            if filesize == 0 {
+                filesize = 1;
+            }
+            assert!(filesize > 0);
+
             size += filesize;
             children.push(Node {
                 size: filesize,

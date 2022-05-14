@@ -94,7 +94,6 @@ fn divide_rect(source: Rect, ratio: f64) -> (Rect, Rect) {
 struct Layouting<'a> {
     remaining: Rect,
     result: Vec<(Rect, &'a Node)>,
-    root_size: u64,
 }
 
 #[derive(PartialEq)]
@@ -106,7 +105,7 @@ enum LayoutDirection {
 macro_rules! print_entity {
     ($x: expr) => {
         {
-            println!("    -> {}: {:?}", stringify!($x), $x);
+            //println!("    -> {}: {:?}", stringify!($x), $x);
         }
     }
 }
@@ -231,8 +230,6 @@ impl<'a> Layouting<'a> {
     /// laid out.
     fn worst(nodes: &[&Node], length: f64) -> f64 {
         let sizes: Vec<_> = nodes.iter().map(|n| {
-            print_entity!(n.size);
-            //(n.size as f64 / self.root_size)
             n.size as f64
         }).collect();
         worst(&sizes, length)
@@ -296,6 +293,8 @@ fn worst(row: &[f64], length: f64) -> f64 {
 }
 
 
+
+
 type BoxData = AppState;
 impl Boxes {
     fn foo_rect(&mut self, root: &Node, bounds: Rect, parent: Option<Rect>) {
@@ -306,16 +305,31 @@ impl Boxes {
                 //     row.push(c.size);
                 // }
 
-                let mut l = Layouting {
-                    remaining: bounds.clone(),
-                    result: vec![],
-                    root_size: root.size,
+                // We can't draw anything in less than a pixel
+                if bounds.area() < 1.0 {
+                    return;
+                }
 
+                // let width =  ((root.size as f64) / bounds.aspect_ratio()).sqrt();
+                // let height = bounds.aspect_ratio() * width;
+                // let width_factor = bounds.width() / width;
+
+                // let pixels_per_byte  = 1.0 / bytes_per_pixel;
+                // print_entity!(width);
+                // print_entity!(height);
+
+                let factor = ((root.size as f64) / bounds.area()).sqrt();
+
+                let mut l = Layouting {
+                    remaining: bounds.scale_from_origin(factor),
+                    result: vec![],
                 };
 
                 l.start(&children);
 
                 for (rect, node) in l.result {
+                    let rect = rect.scale_from_origin(factor.recip());
+                    print_entity!(rect);
                     self.foo_rect(node, rect, Some(bounds));
                 }
 

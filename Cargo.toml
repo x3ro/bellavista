@@ -11,6 +11,7 @@ split-debuginfo = "unpacked"
 [dependencies]
 druid = { git = "https://github.com/linebender/druid", branch = "master" }
 bytesize = "1.0.0"
+assert_approx_eq = "1.1.0"
 
 [patch.crates-io]
 #druid = { path = "vendor/druid/druid"}

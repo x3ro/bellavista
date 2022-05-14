@@ -18,10 +18,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::mem::swap;
 
-use druid::{
-    BoxConstraints, Color, Env, Event, EventCtx, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx,
-    Rect, RenderContext, Size, UpdateCtx, Widget,
-};
+use druid::{BoxConstraints, Color, Env, Event, EventCtx, kurbo, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point, Rect, RenderContext, Size, UpdateCtx, Widget};
 use druid::widget::prelude::Data;
 use druid::piet::InterpolationMode;
 use druid::piet::PietImage;
@@ -127,31 +124,40 @@ fn divide_rect(source: Rect, ratio: f64) -> (Rect, Rect) {
 //     (x, y)
 // }
 
-/// Gives the highest aspect ratio of a list of rectangles (`row`),
-/// given the `length` of the side along which they are to be
-/// laid out.
-fn worst(row: &[u64], length: f64) -> f64 {
-    let sum: u64 = row.iter().sum();
-    let max = (*row.iter().max().unwrap()) as f64;
-    let min = (*row.iter().min().unwrap()) as f64;
 
-    let lpow = length.powf(2.0) as f64;
-    let spow = sum.pow(2) as f64;
 
-    let left = (lpow * max) / spow;
-    let right = spow / (lpow * min);
-
-    left.max(right)
-}
-
-struct Layouting {
+struct Layouting<'a> {
     remaining: Rect,
-
+    result: Vec<(Rect, &'a Node)>
 }
 
-impl Layouting {
+#[derive(PartialEq)]
+enum LayoutDirection {
+    Vertical,
+    Horizontal
+}
+
+impl LayoutDirection {
+    pub fn flip(&self) -> Self {
+        use LayoutDirection::*;
+        match self {
+            Vertical => Horizontal,
+            Horizontal => Vertical
+        }
+    }
+}
+
+macro_rules! print_entity {
+    ($x: expr) => {
+        {
+            println!("    -> {}: {:?}", stringify!($x), $x);
+        }
+    }
+}
+
+impl<'a> Layouting<'a> {
     /// gives the length of the shortest side of the remaining sub-rectangle
-    fn width(&self) -> f64 {
+    fn short_length(&self) -> f64 {
         if self.remaining.aspect_ratio() > 1.0 {
             self.remaining.width()
         } else {
@@ -159,25 +165,188 @@ impl Layouting {
         }
     }
 
-    fn layoutrow(&self, row: &[u64]) {
-        todo!()
+    fn long_length(&self) -> f64 {
+        if self.remaining.aspect_ratio() > 1.0 {
+            self.remaining.height()
+        } else {
+            self.remaining.width()
+        }
     }
 
-    fn squarify(&self, children: &[u64], row: Vec<u64>, w: f64) {
+    fn layout_direction(&self) -> LayoutDirection {
+        if self.remaining.aspect_ratio() > 1.0 {
+            LayoutDirection::Horizontal
+        } else {
+            LayoutDirection::Vertical
+        }
+    }
+
+    fn layout_row(&mut self, row: Vec<&'a Node>, ratio: f64) {
+        let row_area = row.iter().fold(0.0, |acc, n| acc + (n.size as f64));
+        let area_ratio = row_area / self.remaining.area();
+        let long_length = area_ratio * self.long_length();
+
+        println!("Layouting");
+        print_entity!(row);
+        print_entity!(ratio);
+        print_entity!(row_area);
+        print_entity!(area_ratio);
+        print_entity!(long_length);
+
+        // We now know that all of the rectangles we're layouting will have one side
+        // with length = `long_length`.
+
+        // Now we need to compute the other sides. And we're always laying out against the short
+        // side of the remaining rectangle.
+        let mut cursor = if LayoutDirection::Vertical == self.layout_direction() {
+            self.remaining.y0
+        } else {
+            self.remaining.x0
+        };
+
+        for node in row {
+            let ratio = (node.size as f64) / row_area;
+            let short_length = ratio * self.short_length();
+
+            println!("Laying out {:?}", node);
+            print_entity!(ratio);
+            print_entity!(short_length);
+            print_entity!(cursor);
+
+            let rect = if LayoutDirection::Vertical == self.layout_direction() {
+                Rect::from_origin_size((self.remaining.x0, cursor), (long_length, short_length))
+            } else {
+                Rect::from_origin_size((cursor, self.remaining.y0), (short_length, long_length))
+            };
+            print_entity!(rect);
+
+            cursor += short_length;
+            self.result.push((rect, node));
+        }
+
+        let x0 = self.remaining.x0;
+        let y0 = self.remaining.y0;
+        let x1 = self.remaining.x1;
+        let y1 = self.remaining.y1;
+
+        self.remaining = if LayoutDirection::Vertical == self.layout_direction() {
+            Rect::new(x0 + long_length, y0, x1, y1)
+        } else {
+            Rect::new(x0, y0 + long_length, x1, y1)
+        };
+
+        print_entity!(self.remaining);
+    }
+
+    fn squarify(&mut self, children: &'a [Node], row: Vec<&'a Node>) {
+        println!("squarify");
+        if children.is_empty() {
+            let length = self.short_length();
+            let current_worst = Self::worst(&row, length);
+            self.layout_row(row, current_worst);
+            return
+        }
+
         let c = children.first().unwrap();
+        let length = self.short_length();
+
+        println!("children {}", children.len());
+        println!("head size {}", c.size);
+        println!("length {}", length);
 
         let mut next_row = row.clone();
-        next_row.push(*c);
-        if worst(&row, w) <= worst(&next_row, w) {
-            self.squarify(&children[1..], next_row, w);
+        next_row.push(c);
+
+
+        let current_worst = Self::worst(&row, length);
+        let next_worst = Self::worst(&next_row, length);
+        println!("{} >= {} -> {}", current_worst, next_worst, current_worst <= next_worst);
+        if current_worst <= 0.0 || current_worst >= next_worst {
+            self.squarify(&children[1..], next_row);
         } else {
-            self.layoutrow(&row);
-            self.squarify(children, vec![], self.width());
+            self.layout_row(row, current_worst);
+            self.squarify(children, vec![]);
+        }
+
+    }
+
+
+
+    /// Gives the highest aspect ratio of a list of rectangles (`row`),
+    /// given the `length` of the side along which they are to be
+    /// laid out.
+    fn worst(nodes: &[&Node], length: f64) -> f64 {
+        let sizes: Vec<_> = nodes.iter().map(|n| n.size as f64).collect();
+        worst(&sizes, length)
+    }
+    //     let row: Vec<f64> = nodes.iter().map(|node| (node.size / 4096) as f64).collect();
+    //
+    //     let sum: f64 = row.iter().sum();
+    //     let max = row.iter().copied().fold(f64::NEG_INFINITY, f64::max) / sum * length;
+    //     let min = row.iter().copied().fold(f64::INFINITY, f64::min) / sum * length;
+    //
+    //     let lpow = length.powf(2.0);
+    //     let spow = lpow;
+    //     //let spow = sum.powf(2.0);
+    //
+    //     let left = (lpow * max) / spow;
+    //     let right = spow / (lpow * min);
+    //
+    //     left.max(right)
+    // }
+
+    fn start(&mut self, children: &'a [Node]) {
+        // let direction = if self.remaining.aspect_ratio() > 1.0 {
+        //     LayoutDirection::Horizontal
+        // } else {
+        //     LayoutDirection::Vertical
+        // };
+
+        match &children {
+            &[] => {
+                println!("Empty slice passed to layouting");
+                return
+            }
+
+            &[first] => {
+                todo!()
+            }
+
+            children => {
+                self.squarify(children, vec![]);
+            }
+            // &[first, tail @ ..] => {
+            //     self.squarify(tail, vec![first], self.width());
+            // }
         }
 
     }
 }
 
+/// Gives the highest aspect ratio of a list of rectangles (`row`),
+/// given the `length` of the side along which they are to be
+/// laid out.
+fn worst(row: &[f64], length: f64) -> f64 {
+    let sum: f64 = row.iter().sum();
+    let max = row.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let min = row.iter().copied().fold(f64::INFINITY, f64::min);
+
+    let lpow = length.powf(2.0);
+    let spow = sum.powf(2.0);
+
+    let left = (lpow * max) / spow;
+    let right = spow / (lpow * min);
+
+    // println!("left {}", left);
+    // println!("right {}", right);
+    // println!("max {}", max);
+    // println!("min {}", min);
+    // println!("sum {}", sum);
+    // println!("lpow {}", lpow);
+    // println!("spow {}", spow);
+
+    left.max(right)
+}
 
 
 type BoxData = AppState;
@@ -185,10 +354,18 @@ impl Boxes {
     fn foo_rect(&mut self, root: &Node, bounds: Rect, parent: Option<Rect>) {
         match &root.children {
             Some(children) => {
-                let mut row = vec![];
-                for c in children {
-                    row.push(c.size);
-                }
+                // let mut row = vec![];
+                // for c in children {
+                //     row.push(c.size);
+                // }
+
+                let mut l = Layouting {
+                    remaining: bounds.clone(),
+                    result: vec![]
+                };
+
+                l.start(&children);
+                panic!("the end");
 
                 // println!("{}", worst(&row, 5));
                 // println!("{}", worst(&row, 50));
@@ -369,6 +546,79 @@ impl Widget<BoxData> for Boxes {
 mod tests {
     use super::*;
 
+    fn make_leaf(size: u64) -> Node {
+        Node {
+            size,
+            path: format!("{}", size),
+            children: None
+        }
+    }
+
+    fn assert_eq_rect(actual: &Rect, expected: &Rect) {
+        assert_approx_eq!(actual.x0, expected.x0);
+        assert_approx_eq!(actual.y0, expected.y0);
+        assert_approx_eq!(actual.x1, expected.x1);
+        assert_approx_eq!(actual.y1, expected.y1);
+    }
+
+    #[test]
+    fn test_foo() {
+        let leafs: Vec<_> = vec![6, 6, 4, 3, 2, 2, 1].into_iter().map(make_leaf).collect();
+        let mut layout = Layouting {
+            remaining: Rect::new(0.0, 0.0, 6.0, 4.0),
+            result: vec![]
+        };
+
+        layout.start(&leafs);
+
+        let (rect, _) = layout.result.get(0).unwrap();
+        assert_eq_rect(rect, &Rect::new(0.0, 0.0, 3.0, 2.0));
+
+        let (rect, _) = layout.result.get(1).unwrap();
+        assert_eq_rect(rect, &Rect::new(0.0, 2.0, 3.0, 4.0));
+
+        let (rect, _) = layout.result.get(2).unwrap();
+        assert_eq_rect(rect, &Rect::new(
+            3.0,
+            0.0,
+            3.0 + (4.0/7.0)*3.0,
+            (7.0/12.0)*4.0
+        ));
+
+        let (rect, _) = layout.result.get(3).unwrap();
+        assert_eq_rect(rect, &Rect::new(
+            3.0 + (4.0/7.0) * 3.0,
+            0.0,
+            6.0,
+            (7.0/12.0)*4.0
+        ));
+
+        let (rect, _) = layout.result.get(4).unwrap();
+        assert_eq_rect(rect, &Rect::new(
+            3.0,
+            (7.0/12.0)*4.0,
+            3.0 + (2.0/5.0)*3.0,
+            4.0,
+        ));
+
+        let (rect, _) = layout.result.get(5).unwrap();
+        assert_eq_rect(rect, &Rect::new(
+            3.0 + (2.0/5.0)*3.0,
+            (7.0/12.0)*4.0,
+            3.0 + (2.0/5.0)*3.0 + (2.0/5.0) * 3.0,
+            4.0,
+        ));
+
+        let (rect, _) = layout.result.get(6).unwrap();
+        assert_eq_rect(rect, &Rect::new(
+            3.0 + (2.0/5.0)*3.0 + (2.0/5.0) * 3.0,
+            (7.0/12.0)*4.0,
+            6.0,
+            4.0,
+        ));
+
+    }
+
     #[test]
     fn test_divide_rect_horizontal() {
         let source = Rect {
@@ -430,4 +680,62 @@ mod tests {
             }
         );
     }
+
+    use assert_approx_eq::assert_approx_eq;
+
+    #[test]
+    fn test_worst() {
+        // Layout for the sequence 6, 6, 4, 3, 2, 2, 1 (sum = 24)
+        // in a rectangle 6 x 4 units
+
+        // First layout step
+
+        let row = vec![6.0];
+        let res = worst(&row, 4.0);
+        assert_approx_eq!(res, 8.0/3.0);
+
+        let row = vec![6.0, 6.0];
+        let res = worst(&row, 4.0);
+        assert_approx_eq!(res, 3.0/2.0);
+
+        let row = vec![6.0, 6.0, 4.0];
+        let res = worst(&row, 4.0);
+        assert_approx_eq!(res, 4.0/1.0);
+
+        // Second layout step
+
+        let row = vec![4.0];
+        let res = worst(&row, 3.0);
+        assert_approx_eq!(res, 9.0/4.0);
+
+        let row = vec![4.0, 3.0];
+        let res = worst(&row, 3.0);
+        assert_approx_eq!(res, 49.0/27.0);
+
+        let row = vec![4.0, 3.0, 2.0];
+        let res = worst(&row, 3.0);
+        assert_approx_eq!(res, 9.0/2.0);
+
+        // Third layout step
+
+        let row = vec![2.0];
+        let res = worst(&row, 5.0/3.0);
+        assert_approx_eq!(res, 25.0/18.0);
+
+        let row = vec![2.0, 2.0];
+        let res = worst(&row, 5.0/3.0);
+        assert_approx_eq!(res, 144.0/50.0);
+
+        // Fourth layout step
+
+        let row = vec![2.0];
+        let res = worst(&row, 5.0/3.0);
+        assert_approx_eq!(res, 25.0/18.0);
+
+        // let row = vec![2.0, 1.0];
+        // let res = worst(&row, 0.6);
+        // assert_approx_eq!(res, 25.0/9.0);
+
+    }
+
 }

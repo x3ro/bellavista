@@ -21,8 +21,10 @@ use std::path::Path;
 
 use std::cmp::Ordering;
 
+#[derive(Debug)]
 pub struct Node {
     pub size: u64,
+
     pub path: String,
     pub children: Option<Vec<Node>>,
 }
@@ -80,7 +82,7 @@ fn visit_dirs(dir: &Path) -> io::Result<Node> {
     }
 
     children.sort();
-    //children.reverse();
+    children.reverse();
 
     Ok(Node {
         size,
